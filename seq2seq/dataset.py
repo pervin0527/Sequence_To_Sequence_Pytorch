@@ -1,14 +1,5 @@
 import torch
-import spacy
 import datasets
-
-from tqdm import tqdm
-from collections import Counter
-
-from torchtext.vocab import vocab
-from torch.utils.data import DataLoader
-from torch.nn.utils.rnn import pad_sequence
-
 
 def get_dataset():
     multi30k = datasets.load_dataset("bentrevett/multi30k")

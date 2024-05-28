@@ -146,8 +146,7 @@ def main():
     clip = 1.0
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    encoder_embedding_dim = 256
-    decoder_embedding_dim = 256
+    embedd_dim = 256
     hidden_dim = 512
     encoder_dropout = 0.5
     decoder_dropout = 0.5
@@ -209,8 +208,8 @@ def main():
     valid_dataloader = get_data_loader(valid_dataset, batch_size=batch_size, pad_index=pad_index, shuffle=False)
     test_dataloader = get_data_loader(test_dataset, batch_size=batch_size, pad_index=pad_index, shuffle=False)
 
-    encoder = Encoder(input_dim, encoder_embedding_dim, hidden_dim, encoder_dropout)
-    decoder = Decoder(output_dim, decoder_embedding_dim, hidden_dim, decoder_dropout)
+    encoder = Encoder(input_dim, embedd_dim, hidden_dim, encoder_dropout)
+    decoder = Decoder(output_dim, embedd_dim, hidden_dim, decoder_dropout)
     model = Seq2Seq(encoder, decoder, device).to(device)
 
     model.apply(init_weights)
