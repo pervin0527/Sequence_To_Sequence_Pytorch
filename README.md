@@ -4,7 +4,7 @@
 
 1. [Sequence to Sequence Learning with Neural Networks](https://arxiv.org/abs/1409.3215)
    - [ ] Paper Review
-   - [ X ] Code Implements
+   - [x] Code Implements
 2. [Show and Tell : A Neural Image Caption Generator](https://arxiv.org/abs/1411.4555)
    - [ ] Paper Review
    - [ ] Code Implements
