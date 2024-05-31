@@ -19,9 +19,8 @@ def train(encoder, decoder, dataloader, optimizer, criterion, device):
     decoder.train()
 
     total_loss = 0
-    total_perplexity = 0
     total_count = 0
-
+    total_perplexity = 0
     for images, captions, seq_len in tqdm(dataloader):
         images = images.to(device)
         captions = captions.to(device)
@@ -51,9 +50,8 @@ def valid(encoder, decoder, dataloader, criterion, device):
     decoder.eval()
 
     total_loss = 0
-    total_perplexity = 0
     total_count = 0
-
+    total_perplexity = 0
     with torch.no_grad():
         for images, captions, seq_len in tqdm(dataloader):
             images = images.to(device)
@@ -75,10 +73,11 @@ def valid(encoder, decoder, dataloader, criterion, device):
     return avg_loss, avg_perplexity
 
 def main():
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     save_dir = "./runs"
     os.makedirs(save_dir, exist_ok=True)
+    writer = SummaryWriter(log_dir=save_dir)
 
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     data_dir = "/home/pervinco/Datasets/COCO2017"
     train_vocab_dir = f'{data_dir}/ImageCaption/vocab.pkl'
     train_img_dir = f"{data_dir}/ImageCaption/train_images"
@@ -86,25 +85,24 @@ def main():
 
     epochs = 100
     img_size = 224
-    batch_size = 1024
+    batch_size = 64
     learning_rate = 0.001
+    weight_decay_rate = 0.00001
+    dropout_prob = 0.2
+    train_backbone = True
     workers = 4
 
     min_freq = 3
-    embed_dim = 512
-    hidden_dim = 512
+    embed_dim = 1024
+    hidden_dim = 1024
     num_layers = 1
-    max_length = 100
+    max_length = 30
 
     if not os.path.exists(train_vocab_dir) and not os.path.exists(train_img_dir):
-        vocab = build_vocab(caption_dir=f'{data_dir}/annotations/captions_train2017.json',
-                            save_path=f'{data_dir}/ImageCaption/vocab.pkl',
-                            min_freq=min_freq)
-        resize_images(image_dir=f"{data_dir}/train2017",
-                      image_size=img_size,
-                      save_dir=f'{data_dir}/ImageCaption/images')
+        vocab = build_vocab(caption_dir=train_cap_dir, save_path=train_vocab_dir, min_freq=min_freq)
+        resize_images(image_dir=f"{data_dir}/train2017", image_size=img_size, save_dir=train_img_dir)
     else:
-        with open(f"{data_dir}/ImageCaption/vocab.pkl", 'rb') as f:
+        with open(train_vocab_dir, 'rb') as f:
             vocab = pickle.load(f)
 
     train_transform = data_transform(True, img_size)
@@ -114,15 +112,16 @@ def main():
     train_dataloader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=workers, collate_fn=collate_fn)
     valid_dataloader = DataLoader(valid_dataset, batch_size=batch_size, shuffle=True, num_workers=workers, collate_fn=collate_fn)
 
-    encoder = EncoderCNN(embed_dim).to(device)
-    decoder = DecoderRNN(embed_dim, hidden_dim, len(vocab), num_layers, max_length).to(device)
+    encoder = EncoderCNN(embed_dim, train_backbone).to(device)
+    decoder = DecoderRNN(embed_dim, hidden_dim, len(vocab), num_layers, max_seq_length=max_length, dropout_prob=dropout_prob).to(device)
+
     criterion = nn.CrossEntropyLoss()
     params = list(decoder.parameters()) + list(encoder.linear.parameters()) + list(encoder.bn.parameters())
-    optimizer = torch.optim.Adam(params, lr=learning_rate)
+    optimizer = torch.optim.Adam(params, lr=learning_rate, weight_decay=weight_decay_rate)
+    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min', patience=5, factor=0.5)
 
-    writer = SummaryWriter(log_dir=save_dir)
+
     best_valid_perplexity = float('inf')
-
     for epoch in range(1, epochs+1):
         print(f"\nEpoch : [{epoch}/{epochs}]")
 
@@ -136,6 +135,7 @@ def main():
         writer.add_scalar('Perplexity/train', train_perplexity, epoch)
         writer.add_scalar('Loss/valid', valid_loss, epoch)
         writer.add_scalar('Perplexity/valid', valid_perplexity, epoch)
+        scheduler.step(valid_loss)
 
         if valid_perplexity < best_valid_perplexity:
             best_valid_perplexity = valid_perplexity

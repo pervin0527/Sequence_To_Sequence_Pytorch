@@ -1,5 +1,6 @@
 import os
 import cv2
+import json
 import spacy
 import torch
 import pickle
@@ -108,6 +109,7 @@ def collate_fn(data):
         targets[i, :end] = cap[:end]
     
     return images, targets, lengths
+
 
 if __name__ == "__main__":
     caption_path = '/home/pervinco/Datasets/COCO2017/annotations/captions_train2017.json'
