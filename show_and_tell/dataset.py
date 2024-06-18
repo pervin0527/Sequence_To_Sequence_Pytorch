@@ -34,7 +34,7 @@ class CaptionDataset(Dataset):
         caption = torch.LongTensor(self.captions[i])
         caplen = torch.LongTensor([self.caplens[i]])
 
-        if self.split is 'TRAIN':
+        if self.split == 'TRAIN':
             return img, caption, caplen
         
         else:
