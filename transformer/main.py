@@ -109,7 +109,7 @@ def main():
     dataset = Multi30kDataset(data_dir=f"{DATA_DIR}/Multi30k", source_language=SRC_LANGUAGE,  target_language=TGT_LANGUAGE,  max_seq_len=MAX_SEQ_LEN, vocab_min_freq=2)
     train_iter, valid_iter, test_iter = dataset.get_iter(batch_size=BATCH_SIZE, num_workers=NUM_WORKERS)
 
-    model = build_model(len(dataset.src_vocab), len(dataset.trg_vocab), device=DEVICE, dr_rate=DROP_PROB)
+    model = build_model(len(dataset.src_vocab), len(dataset.trg_vocab), device=DEVICE, drop_prob=DROP_PROB)
     model.apply(initialize_weights)
 
     optimizer = torch.optim.Adam(params=model.parameters(), lr=LEARNING_RATE, weight_decay=WEIGHT_DECAY, eps=ADAM_EPS)

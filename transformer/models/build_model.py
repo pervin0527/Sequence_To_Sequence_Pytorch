@@ -3,74 +3,82 @@ import torch
 
 from torch import nn
 
-from models.embedding.token_embedding import TokenEmbedding
+from models.embedding.token_embedding import WordEmbedding
 from models.embedding.positional_encoding import PositionalEncoding
 from models.embedding.transformer_embedding import TransformerEmbedding
 
-from models.layer.multi_head_attention import MultiHeadAttention
-from models.layer.position_wise_feed_forward import PositionWiseFeedForward
-from models.layer.encoder_layer import EncoderLayer
-from models.layer.decoder_layer import DecoderLayer
+from models.layer.multi_head_attention import MultiHeadAttentionLayer
+from models.layer.position_wise_feed_forward import FeedForwardLayer
+from models.layer.encoder_layer import EncoderBlock
+from models.layer.decoder_layer import DecoderBlock
 
 from models.model.encoder import Encoder
 from models.model.decoder import Decoder
 from models.model.transformer import Transformer
 
 def build_model(src_vocab_size,
-                trg_vocab_size,
-                max_seq_len = 256,
-                d_embed = 512,
-                num_layer = 6,
-                d_model = 512,
-                num_heads = 8,
-                d_ff = 2048,
-                dr_rate = 0.1,
-                norm_eps = 1e-5,
+                trg_vocab_size, 
+                max_seq_len=256,
+                d_model=512, 
+                num_layer=6, 
+                num_heads=8, 
+                d_ff=2048, 
+                norm_eps=1e-5,
+                drop_prob=0.1, 
                 device=torch.device("cpu")):
+
+    ## Word Embedding.
+    src_token_embed = WordEmbedding(d_model=d_model, vocab_size=src_vocab_size)
+    trg_token_embed = WordEmbedding(d_model=d_model, vocab_size=trg_vocab_size)
+
+    ## Positional Encoding.
+    src_pos_embedd = PositionalEncoding(d_model=d_model, max_seq_len=max_seq_len, device=device)
+    trg_pos_embedd = PositionalEncoding(d_model=d_model, max_seq_len=max_seq_len, device=device)
+
+    ## Word Embedding + Positional Encoding.
+    trg_embed = TransformerEmbedding(word_embedding_layer=trg_token_embed, positional_encoding_layer=trg_pos_embedd, drop_prob=drop_prob)
+    src_embed = TransformerEmbedding(word_embedding_layer=src_token_embed, positional_encoding_layer=src_pos_embedd, drop_prob=drop_prob)
+
+    ## Multi-Head Self Attention.
+    encoder_attention = MultiHeadAttentionLayer(d_model=d_model, num_heads=num_heads, drop_prob=drop_prob)
+    decoder_attention = MultiHeadAttentionLayer(d_model=d_model, num_heads=num_heads, drop_prob=drop_prob)
     
-    ## Embedding
-    src_token_embedder = TokenEmbedding(d_embed=d_embed, vocab_size=src_vocab_size)
-    trg_token_embedder = TokenEmbedding(d_embed=d_embed, vocab_size=trg_vocab_size)
-    pos_encoder = PositionalEncoding(d_embed=d_embed, max_seq_len=max_seq_len, device=device)
+    ## Position-Wise FeedForward.
+    encoder_position_ff = FeedForwardLayer(d_model, d_ff, drop_prob=drop_prob)
+    decoder_position_ff = FeedForwardLayer(d_model, d_ff, drop_prob=drop_prob)
 
-    src_embedder = TransformerEmbedding(token_embedder=src_token_embedder, position_encoder=pos_encoder, dr_rate=dr_rate)
-    trg_embedder = TransformerEmbedding(token_embedder=trg_token_embedder, position_encoder=pos_encoder, dr_rate=dr_rate)
+    ## Add & Norm.
+    encoder_norm = nn.LayerNorm(d_model, eps=norm_eps)
+    decoder_norm = nn.LayerNorm(d_model, eps=norm_eps)
 
-    ## Multi-Head Attention : qkv_fc, out_fc는 nn.Linear를 호출시 전달함으로써 encoder_layers와 decoder_layers가 해당 층들을 재사용하는 것과 같음.
-    attention_layer = MultiHeadAttention(d_model=d_model, 
-                                         num_heads=num_heads, 
-                                         qkv_fc=nn.Linear(d_embed, d_model), 
-                                         out_fc=nn.Linear(d_model, d_embed), 
-                                         dr_rate=dr_rate)
-
-    ## Position-wise FeedForward
-    position_ff_layer = PositionWiseFeedForward(fc1=nn.Linear(d_embed, d_ff), fc2=nn.Linear(d_ff, d_embed), dr_rate=dr_rate)
-
-    ## LayerNorm
-    norm_layer = nn.LayerNorm(d_embed, eps=norm_eps)
-
-    ## Encoder
-    encoder_layer = EncoderLayer(self_attention=copy.deepcopy(attention_layer), 
-                                 position_ff=copy.deepcopy(position_ff_layer),
-                                 norm_layer=copy.deepcopy(norm_layer),
-                                 dr_rate=dr_rate)
+    ## Encoder Block.
+    encoder_block = EncoderBlock(self_attention=encoder_attention,
+                                 ffn=encoder_position_ff,
+                                 norm=encoder_norm,
+                                 drop_prob=drop_prob)
     
-    encoder = Encoder(encoder_layer=encoder_layer, num_layer=num_layer, norm_layer=copy.deepcopy(norm_layer))
-    
-    ## Decoder
-    decoder_layer = DecoderLayer(self_attention=copy.deepcopy(attention_layer), 
-                                 cross_attention=copy.deepcopy(attention_layer),
-                                 position_ff=copy.deepcopy(position_ff_layer),
-                                 norm_layer=copy.deepcopy(norm_layer),
-                                 dr_rate=dr_rate)
-    
-    decoder = Decoder(decoder_layer=decoder_layer, num_layer=num_layer, norm_layer=copy.deepcopy(norm_layer))
+    ## Decoder Block
+    decoder_block = DecoderBlock(self_attention=decoder_attention,
+                                 cross_attention=decoder_attention,
+                                 ffn=decoder_position_ff,
+                                 norm=decoder_norm,
+                                 drop_prob=drop_prob)
 
-    ## Transformer Outpyt Layer
-    output_layer = nn.Linear(d_model, trg_vocab_size)
+    ## Encoder(Encoder Block * Num_layers)
+    encoder = Encoder(encoder_block=encoder_block, num_layer=num_layer, norm=encoder_norm)
 
-    ## Transformer Model
-    model = Transformer(src_embed=src_embedder, trg_embed=trg_embedder, encoder=encoder, decoder=decoder, generator=output_layer).to(device)
+    ## Decoder(Decoder Block * Num_layers)
+    decoder = Decoder(decoder_block=decoder_block, num_layer=num_layer, norm=decoder_norm)
+
+    ## Output Layer.
+    generator = nn.Linear(d_model, trg_vocab_size)
+
+    model = Transformer(src_embed=src_embed,
+                        trg_embed=trg_embed,
+                        encoder=encoder,
+                        decoder=decoder,
+                        generator=generator).to(device)
+    
     model.device = device
 
     return model

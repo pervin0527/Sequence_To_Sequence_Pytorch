@@ -1,16 +1,21 @@
 from torch import nn
 
-class ResidualConnection(nn.Module):
-    def __init__(self, norm_layer, dr_rate=0):
+class ResidualConnectionLayer(nn.Module):
+    def __init__(self, norm, drop_prob=0):
         super().__init__()
-        self.norm_layer = norm_layer
-        self.dropout = nn.Dropout(p=dr_rate)
+        self.norm = norm
+        self.dropout = nn.Dropout(p=drop_prob)
 
-    def forward(self, x, sub_layer):
+    def forward(self, x, sub_layer): ## 입력 텐서와 sublayer를 입력 받는 것에 주목.
         out = x
-        out = self.norm_layer(out)
+        out = self.norm(out)
         out = sub_layer(out)
         out = self.dropout(out)
         out = out + x
 
-        return x
+        # out = x
+        # out = sub_layer(out)
+        # out = self.dropout(out)
+        # out = self.norm(x + out)
+        
+        return out

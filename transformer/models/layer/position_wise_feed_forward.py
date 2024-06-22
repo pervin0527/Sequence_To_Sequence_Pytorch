@@ -1,13 +1,12 @@
 from torch import nn
 
-class PositionWiseFeedForward(nn.Module):
-    def __init__(self, fc1, fc2, dr_rate=0):
+class FeedForwardLayer(nn.Module):
+    def __init__(self, d_embed, d_ff, drop_prob=0):
         super().__init__()
-        self.fc1 = fc1 ## (d_embed, d_ff)
+        self.fc1 = nn.Linear(d_embed, d_ff)   # (d_embed, d_ff)
         self.relu = nn.ReLU()
-        self.dropout = nn.Dropout(p=dr_rate)
-
-        self.fc2 = fc2 ## (d_ff, d_embed)
+        self.dropout = nn.Dropout(p=drop_prob)
+        self.fc2 = nn.Linear(d_ff, d_embed) # (d_ff, d_embed)
 
     def forward(self, x):
         out = x
@@ -17,4 +16,3 @@ class PositionWiseFeedForward(nn.Module):
         out = self.fc2(out)
 
         return out
-
